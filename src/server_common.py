@@ -97,8 +97,10 @@ class User(object):
     def __set_clear_password(self, clear_password):
         random = nss.nss.generate_random(self.__salt_length)
         salt = '$6$'
+        if isinstance(random, str):
+            random = [ord(c) for c in random]
         for i in range(self.__salt_length):
-            salt += self.__salt_characters[ord(random[i]) %
+            salt += self.__salt_characters[random[i] %
                                            len(self.__salt_characters)]
         self.sha512_password = crypt.crypt(clear_password, salt)
     clear_password = property(fset=__set_clear_password,
