@@ -48,18 +48,24 @@ def _id(obj):
         __ids[obj] = new_id
         return new_id
 
-# _debug_file = None
-# _debug_pid = None
+
+_debug_file = None
+_debug_pid = None
+ENABLE_DEBUGGING = False
 
 
 def _debug(fmt, *args):
-    # global _debug_pid, _debug_file
-    # pid = os.getpid()
-    # if _debug_pid != pid:
-    #     _debug_pid = pid
-    #     _debug_file = open('/tmp/debug%d' % os.getpid(), 'w', 0)
-    # print >> _debug_file, fmt % args
-    pass
+    if not ENABLE_DEBUGGING:
+        return
+
+    global _debug_pid, _debug_file
+    pid = os.getpid()
+    if _debug_pid != pid:
+        _debug_pid = pid
+        _debug_file = open('/tmp/debug%d' % os.getpid(), 'bw', 0)  # nosec
+    msg = fmt % args
+    msg = msg.encode('utf-8')
+    _debug_file.write(msg + b'\n')
 
 
 class ChildConnectionRefusedError(Exception):
