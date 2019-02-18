@@ -42,7 +42,7 @@ def _id(obj):
         new_id = ''
         while True:
             new_id = chr(ord('A') + counter % 26) + new_id
-            counter /= 26
+            counter = int(counter / 26)
             if counter == 0:
                 break
         __ids[obj] = new_id
@@ -208,7 +208,7 @@ class _CombiningBuffer(_ForwardingBuffer):
         self.__inner_src = inner_src
         self.__outer_src = outer_src
         self.__dst = dst
-        self.__buffer = ''
+        self.__buffer = b''
         self.__buffer_dropped = False
         self.__inner_src_open = True
         self.__outer_src_open = True
@@ -272,7 +272,7 @@ class _CombiningBuffer(_ForwardingBuffer):
                 if not self.__buffer_dropped:
                     self.__buffer_dropped = True
                     logging.debug('_CombiningBuffer: data dropped')
-                self.__buffer = ''
+                self.__buffer = b''
 
     def _send(self, poll_descs):
         if (poll_descs.get(self.__dst, 0) & (
@@ -300,7 +300,7 @@ class _CombiningBuffer(_ForwardingBuffer):
         except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 _debug('...!exception, closing src: %s', repr(e))
-                data = ''
+                data = b''
             elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
                 _debug('...!would block: %s', repr(e))
                 return False
@@ -334,7 +334,7 @@ class _CombiningBuffer(_ForwardingBuffer):
         except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 _debug('...!exception, closing src: %s', repr(e))
-                data = ''
+                data = b''
             elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
                 _debug('...!would block: %s', repr(e))
                 return False
@@ -393,9 +393,9 @@ class _SplittingBuffer(_ForwardingBuffer):
         self.__outer_dst = outer_dst
         self.__inner_bytes_left = 0
         self.__outer_bytes_left = 0
-        self.__header_buffer = ''
-        self.__inner_buffer = ''
-        self.__outer_buffer = ''
+        self.__header_buffer = b''
+        self.__inner_buffer = b''
+        self.__outer_buffer = b''
         self.__inner_buffer_dropped = False
         self.__outer_buffer_dropped = False
         self.__src_open = True
@@ -444,7 +444,7 @@ class _SplittingBuffer(_ForwardingBuffer):
                 if not self.__inner_buffer_dropped:
                     self.__inner_buffer_dropped = True
                     logging.debug('_SplittingBuffer: inner data dropped')
-                self.__inner_buffer = ''
+                self.__inner_buffer = b''
         if (poll_descs.get(self.__outer_dst, 0) & _POLL_PROBLEM) != 0:
             _debug('b%s: outer dst %s problem', _id(self),
                    _id(self.__outer_dst))
@@ -452,7 +452,7 @@ class _SplittingBuffer(_ForwardingBuffer):
                 if not self.__outer_buffer_dropped:
                     self.__outer_buffer_dropped = True
                     logging.debug('_SplittingBuffer: outer data dropped')
-                self.__outer_buffer = ''
+                self.__outer_buffer = b''
 
     def _send(self, poll_descs):
         if (poll_descs.get(self.__inner_dst, 0) & (
@@ -485,7 +485,7 @@ class _SplittingBuffer(_ForwardingBuffer):
         except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 _debug('...!exception, closing src: %s', repr(e))
-                data = ''
+                data = b''
             elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
                 _debug('...!would block: %s', repr(e))
                 return
@@ -518,7 +518,7 @@ class _SplittingBuffer(_ForwardingBuffer):
                     raise Exception('Buffer is larger than max size')
                 if len(self.__header_buffer) == utils.u32_size:
                     v = utils.u32_unpack(self.__header_buffer)
-                    self.__header_buffer = ''
+                    self.__header_buffer = b''
                     _debug('... header: %08x', v)
                     if (v & _chunk_inner_mask) != 0:
                         self.__inner_bytes_left = v & ~_chunk_inner_mask
@@ -751,7 +751,7 @@ class DoubleTLSClient(object):
         Raise EOFError.
 
         '''
-        res = ''
+        res = b''
         while len(res) < buf_size:
             run = socket.recv(buf_size - len(res))
             if len(run) == 0:
@@ -857,8 +857,8 @@ class OuterBuffer(object):
 
     def __init__(self, socket):
         self.__socket = socket
-        self.__inner_packets = ''
-        self.__outer_data = ''
+        self.__inner_packets = b''
+        self.__outer_data = b''
 
     @property
     def socket(self):
@@ -871,7 +871,7 @@ class OuterBuffer(object):
         Raise EOFError.
 
         '''
-        res = ''
+        res = b''
         while len(res) < buf_size:
             run = self.__socket.recv(buf_size - len(res))
             if len(run) == 0:
@@ -885,7 +885,7 @@ class OuterBuffer(object):
         Raise EOFError on EOF.
 
         '''
-        res = ''
+        res = b''
         while len(res) < buf_size:
             run = min(buf_size - len(res), len(self.__outer_data))
             _debug('o%s: consuming %d outer data bytes', _id(self), run)
@@ -942,7 +942,7 @@ class OuterBuffer(object):
         _debug('o%s: %d bytes of pending inner packets returned', _id(self),
                len(self.__inner_packets))
         res = self.__inner_packets
-        self.__inner_packets = ''
+        self.__inner_packets = b''
         return res
 
     def add_outer_data(self, data):
@@ -961,12 +961,12 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
         self.__dst = dst
         self.__inner_bytes_left = 0
         self.__outer_bytes_left = 0
-        self.__header_buffer = ''
+        self.__header_buffer = b''
         self.__buffer = inner_packets
         self.__buffer_dropped = False
         self.__src_open = True  # FIXME: closed in inner_packets?
         self.__dst_shut_down = False
-        self.__outer_data = ''
+        self.__outer_data = b''
 
     def pending_outer_data(self):
         '''Return outer stream data that needs handling.
@@ -974,7 +974,7 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
         Repeated calls of this method always return only newly received data.
         '''
         res = self.__outer_data
-        self.__outer_data = ''
+        self.__outer_data = b''
         return res
 
     @property
@@ -1006,7 +1006,7 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
                 if not self.__buffer_dropped:
                     self.__buffer_dropped = True
                     logging.debug('_InnerBridgingBuffer: data dropped')
-                self.__buffer = ''
+                self.__buffer = b''
 
     def _send(self, poll_descs):
         if (poll_descs.get(self.__dst, 0) & (
@@ -1029,7 +1029,7 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
         except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 _debug('...!exception, closing src: %s', repr(e))
-                data = ''
+                data = b''
             elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
                 _debug('...!would block: %s', repr(e))
                 return
@@ -1073,7 +1073,7 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
                             self.__dst_shut_down = True
                     else:
                         self.__outer_bytes_left = v
-                    self.__header_buffer = ''
+                    self.__header_buffer = b''
 
     def _check_shutdown(self):
         if not self._active:

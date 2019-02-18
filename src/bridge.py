@@ -1110,7 +1110,7 @@ class StoringProxy(object):
 
     def __init__(self, buf):
         self.__buf = buf
-        self.__stored = ''
+        self.__stored = b''
 
     def stored_read(self, size):
         '''Read size bytes from the buffer and store the result.'''
@@ -1126,7 +1126,7 @@ class StoringProxy(object):
 
         '''
         res = self.__stored
-        self.__stored = ''
+        self.__stored = b''
         return res
 
 
@@ -1206,7 +1206,7 @@ class BridgeConnection(object):
         except KeyError:
             raise InvalidRequestError('op field missing')
         try:
-            rt = request_types[op]
+            rt = request_types[op.decode('utf-8')]
         except KeyError:
             raise InvalidRequestError('Unknown op value')
         self.__handler = rt.handler()

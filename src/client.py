@@ -403,7 +403,7 @@ def print_list_in_payload(conn, num_field_name):
     start = 0
     for _ in range(conn.response_field_int(num_field_name)):
         try:
-            i = payload.index('\x00', start)
+            i = payload.index(b'\x00', start)
         except ValueError:
             raise InvalidResponseError('Invalid payload format')
         e = payload[start:i]
@@ -411,7 +411,7 @@ def print_list_in_payload(conn, num_field_name):
         if not utils.string_is_safe(e):
             raise InvalidResponseError('Unprintable string in reply from '
                                        'server')
-        print(e)
+        print(e.decode('utf-8'))
 
 
 def key_user_add_password_option(p2):
@@ -725,7 +725,7 @@ def cmd_new_key(conn, args):
     conn.empty_payload()
     conn.send_inner({'password': password, 'passphrase': passphrase})
     conn.read_response()
-    pubkey = conn.read_payload()
+    pubkey = conn.read_payload().decode('utf-8')
     if not utils.string_is_safe(pubkey.replace('\n', '')):
         raise InvalidResponseError('Public key is not safely printable')
     print(pubkey, end='')
@@ -936,6 +936,7 @@ def cmd_get_public_key(conn, args):
     conn.send_inner(inner_f)
     conn.read_response()
     pubkey = conn.read_payload()
+    pubkey = pubkey.decode('utf-8')
     if not utils.string_is_safe(pubkey.replace('\n', '')):
         raise InvalidResponseError('Public key is not safely printable')
     print(pubkey, end='')

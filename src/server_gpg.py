@@ -56,18 +56,14 @@ try:
         def edit(self, key, func, sink):
             def wrapper(*args, **kwargs):
                 res = func(*args)
-                if isinstance(res, str):  # TODO: Fix for py3
+                if isinstance(res, bytes):
                     res = res.decode('utf-8')
                 return res
 
             self.interact(key, wrapper, wrapsio(sink))
 
         def export(self, fingerprint, data):
-            import logging
-            logging.info("Export requested for fpr %s", fingerprint)
-            res = self.op_export(fingerprint, 0, wrapsio(data))
-            logging.info("Res: %s", res)
-            return res
+            return self.op_export(fingerprint, 0, wrapsio(data))
 
         def sigul_import(self, key_file):
             self.op_import(key_file)

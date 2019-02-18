@@ -162,7 +162,7 @@ class ServerProxy(object):
 
     def __init__(self, server):
         self.__server = server
-        self.__stored = ''
+        self.__stored = b''
 
     def stored_outer_read(self, bytes):
         data = self.__server.outer_read(bytes)
@@ -177,7 +177,7 @@ class ServerProxy(object):
 
         '''
         res = self.__stored
-        self.__stored = ''
+        self.__stored = b''
         return res
 
 
@@ -292,7 +292,7 @@ class ServersConnection(object):
         buf = self.__client.outer_read(utils.u64_size)
         payload_size = utils.u64_unpack(buf)
 
-        request_op = self.safe_outer_field('op', required=True)
+        request_op = self.safe_outer_field('op', required=True).decode('utf-8')
         if request_op not in request_handlers:
             request_op = None
         handler = request_handlers[request_op]
@@ -409,6 +409,8 @@ class ServersConnection(object):
 
     def send_reply_payload(self, payload):
         '''Send payload to the client.'''
+        if not isinstance(payload, bytes):
+            payload = payload.encode('utf-8')
         self.__send_payload_size(len(payload))
         self.__reply_payload_writer.write(payload)
         self.__reply_payload_writer.write_64B_hmac()
@@ -420,7 +422,7 @@ class ServersConnection(object):
     def send_reply_ok_only(self):
         '''Send an erorrs.OK reply with no fields or payload.'''
         self.send_reply_header(errors.OK, {})
-        self.send_reply_payload('')
+        self.send_reply_payload(b'')
 
     def send_error(self, error_code, message=None, log_it=True):
         '''Send an erorr response with code and message.
@@ -438,7 +440,7 @@ class ServersConnection(object):
             if log_it:
                 logging.info('Request error: %s', errors.message(error_code))
         self.send_reply_header(error_code, f)
-        self.send_reply_payload('')
+        self.send_reply_payload(b'')
         raise RequestHandled()
 
     def read_subheader(self, nss_key):
@@ -551,9 +553,12 @@ class ServersConnection(object):
         password = self.inner_field('password')
         if password is None:
             self.auth_fail('password field missing')
+        password = password.decode('utf-8')
         user = db.query(User).filter_by(name=user).first()
         if user is not None and user.sha512_password is not None:
-            crypted_pw = str(user.sha512_password)
+            crypted_pw = user.sha512_password
+            if isinstance(crypted_pw, bytes):
+                crypted_pw = crypted_pw.decode('utf-8')
         else:
             # Perform the encryption anyway to make timing attacks more
             # difficult.
@@ -589,11 +594,13 @@ class ServersConnection(object):
         access = None
         if password is not None:
             if user is not None and user.sha512_password is not None:
-                crypted_pw = str(user.sha512_password)
+                crypted_pw = user.sha512_password
             else:
                 # Perform the encryption anyway to make timing attacks more
                 # difficult.
                 crypted_pw = 'x'
+            password = password.decode('utf-8')
+            crypted_pw = crypted_pw.decode('utf-8')
             if crypt.crypt(password, crypted_pw) != crypted_pw:
                 self.auth_fail('password does not match')
             if user is None:
@@ -949,9 +956,9 @@ def cmd_list_users(db, conn):
     # Order by name to hide database structure
     users = db.query(User).order_by(User.name).all()
     conn.send_reply_header(errors.OK, {'num-users': len(users)})
-    payload = ''
+    payload = b''
     for user in users:
-        payload += user.name + '\x00'
+        payload += user.name + b'\x00'
     conn.send_reply_payload(payload)
 
 
@@ -988,7 +995,7 @@ def cmd_user_info(db, conn):
     conn.authenticate_admin(db)
     user = user_by_name(db, conn)
     conn.send_reply_header(errors.OK, {'admin': user.admin})
-    conn.send_reply_payload('')
+    conn.send_reply_payload(b'')
 
 
 @request_handler()
@@ -1016,7 +1023,7 @@ def cmd_key_user_info(db, conn):
     conn.authenticate_admin(db)
     access = key_access_by_names(db, conn)
     conn.send_reply_header(errors.OK, {'key-admin': access.key_admin})
-    conn.send_reply_payload('')
+    conn.send_reply_payload(b'')
 
 
 @request_handler()
@@ -1036,9 +1043,9 @@ def cmd_list_keys(db, conn):
     # Order by name to hide database structure
     keys = db.query(Key).order_by(Key.name).all()
     conn.send_reply_header(errors.OK, {'num-keys': len(keys)})
-    payload = ''
+    payload = b''
     for user in keys:
-        payload += user.name + '\x00'
+        payload += user.name + b'\x00'
     conn.send_reply_payload(payload)
 
 
@@ -1067,18 +1074,18 @@ def cmd_new_key(db, conn):
     name = conn.safe_outer_field('name-real')
     if name is None:
         name = key_name
-    key_attrs += 'Name-Real: {0!s}\n'.format(name)
+    key_attrs += 'Name-Real: {0!s}\n'.format(name.decode('utf-8'))
     name = conn.safe_outer_field('name-comment')
     if name is not None:
-        key_attrs += 'Name-Comment: {0!s}\n'.format(name)
+        key_attrs += 'Name-Comment: {0!s}\n'.format(name.decode('utf-8'))
     name = conn.safe_outer_field('name-email')
     if name is not None:
-        key_attrs += 'Name-Email: {0!s}\n'.format(name)
+        key_attrs += 'Name-Email: {0!s}\n'.format(name.decode('utf-8'))
     expire = conn.safe_outer_field('expire-date')
     if expire is not None:
         if not utils.yyyy_mm_dd_is_valid(expire):
             raise InvalidRequestError('Invalid expiration date')
-        key_attrs += 'Expire-Date: {0!s}\n'.format(expire)
+        key_attrs += 'Expire-Date: {0!s}\n'.format(expire.decode('utf-8'))
     user_passphrase = conn.inner_field('passphrase', required=True)
 
     env = dict(os.environ)  # Shallow copy, uses our $GNUPGHOME
@@ -1087,30 +1094,30 @@ def cmd_new_key(db, conn):
                             '--quiet', '--status-fd', '1'),
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE, close_fds=True, env=env)
-    (out, err) = sub.communicate(key_attrs)
-    for line in err.split('\n'):
-        good_startswiths = ('gpg: WARNING: unsafe permissions on homedir',
-                            'Not enough random bytes available.',
-                            'the OS a chance to collect more entropy')
-        if (line != '' and
+    (out, err) = sub.communicate(key_attrs.encode('utf-8'))
+    for line in err.split(b'\n'):
+        good_startswiths = (b'gpg: WARNING: unsafe permissions on homedir',
+                            b'Not enough random bytes available.',
+                            b'the OS a chance to collect more entropy')
+        if (line != b'' and
                 not line.startswith(good_startswiths) and
-                not (line.startswith('gpg: key ') and
-                     line.endswith('marked as ultimately trusted'))):
-            logging.error('Unrecognized GPG stderr: %s', repr(line))
+                not (line.startswith(b'gpg: key ') and
+                     line.endswith(b'marked as ultimately trusted'))):
+            logging.error(b'Unrecognized GPG stderr: %s', repr(line))
             conn.send_error(errors.UNKNOWN_ERROR)
     fingerprint = None
-    for line in out.split('\n'):
-        if (line == '' or line == '[GNUPG:] GOOD_PASSPHRASE' or
-                line.startswith('[GNUPG:] PROGRESS')):
+    for line in out.split(b'\n'):
+        if (line == b'' or line == b'[GNUPG:] GOOD_PASSPHRASE' or
+                line.startswith(b'[GNUPG:] PROGRESS')):
             continue
-        elif line.startswith('[GNUPG:] KEY_CREATED'):
+        elif line.startswith(b'[GNUPG:] KEY_CREATED'):
             pass
-        elif line.startswith('[GNUPG:] KEY_CONSIDERED'):
+        elif line.startswith(b'[GNUPG:] KEY_CONSIDERED'):
             pass
         else:
             logging.error('Unrecognized GPG stdout: %s', repr(line))
             conn.send_error(errors.UNKNOWN_ERROR)
-        fingerprint = line.split(' ')[-1]
+        fingerprint = line.split(b' ')[-1]
     if fingerprint is None:
         logging.error('Can not find fingerprint of a new key in gpg output')
         conn.send_error(errors.UNKNOWN_ERROR)
@@ -1209,9 +1216,9 @@ def cmd_list_key_users(db, conn):
     # Order by name to hide database structure
     names = sorted(access.user.name for access in key.key_accesses)
     conn.send_reply_header(errors.OK, {'num-users': len(names)})
-    payload = ''
+    payload = b''
     for name in names:
-        payload += name + '\x00'
+        payload += name + b'\x00'
     conn.send_reply_payload(payload)
 
 
@@ -1811,15 +1818,15 @@ def cmd_list_binding_methods(db, conn):
     conn.authenticate_admin(db)
     methods = utils.BindingMethodRegistry.get_registered_methods()
     conn.send_reply_header(errors.OK, {'num-methods': len(methods)})
-    payload = ''
+    payload = b''
     for method in methods:
-        payload += method + '\x00'
+        payload += method + b'\x00'
     conn.send_reply_payload(payload)
 
 
 def unknown_request_handler(unused_db, conn):
     conn.send_reply_header(errors.UNKNOWN_OP, {})
-    conn.send_reply_payload('')
+    conn.send_reply_payload(b'')
 # Allow some payload in order to return errors.UNKNOWN_OP rather than fail with
 # "payload too large"
 request_handlers[None] = RequestHandler(unknown_request_handler,

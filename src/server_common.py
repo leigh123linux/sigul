@@ -19,8 +19,8 @@
 import copy
 import crypt
 import logging
+from io import BytesIO
 import os
-from six import StringIO
 import shutil
 import subprocess
 import tempfile
@@ -95,6 +95,9 @@ class User(object):
         'abcdefghijklmnopqrstuvwxyz'
 
     def __set_clear_password(self, clear_password):
+        if isinstance(clear_password, bytes):
+            clear_password = clear_password.decode('utf-8')
+
         random = nss.nss.generate_random(self.__salt_length)
         salt = '$6$'
         if isinstance(random, str):
@@ -102,7 +105,8 @@ class User(object):
         for i in range(self.__salt_length):
             salt += self.__salt_characters[random[i] %
                                            len(self.__salt_characters)]
-        self.sha512_password = crypt.crypt(clear_password, salt)
+        self.sha512_password = crypt.crypt(clear_password,
+                                           salt).encode('utf-8')
     clear_password = property(fset=__set_clear_password,
                               doc='Setting this attribute updates '
                               'sha512_password')
@@ -322,9 +326,9 @@ def gpg_public_key(config, fingerprint):
     '''Return an ascii-armored public key.'''
     ctx = _gpg_open(config)
     ctx.armor = 1
-    data = StringIO()
+    data = BytesIO()
     ctx.export(fingerprint, data)
-    return data.getvalue()
+    return data.getvalue().decode('utf-8')
 
 
 def gpg_delete_key(config, fingerprint):
@@ -353,7 +357,7 @@ def gpg_edit_key(config, fingerprint, input_states, ignored_states):
     errors = []
     states = copy.copy(input_states)
     replies = []
-    out_fd = StringIO()
+    out_fd = BytesIO()
 
     def update_out():
         out_fd.seek(0)
@@ -510,7 +514,7 @@ def gpg_change_password(config, fingerprint, old_passphrase, new_passphrase):
     key = ctx.get_key(fingerprint, True)
     responder = _ChangePasswordResponder(old_passphrase, new_passphrase)
     try:
-        ctx.edit(key, responder.callback, StringIO())
+        ctx.edit(key, responder.callback, BytesIO())
     except ourgpg.GPGMEError:
         if responder.exception is not None:
             raise responder.exception
@@ -523,12 +527,16 @@ def gpg_change_password(config, fingerprint, old_passphrase, new_passphrase):
 
 def gpg_encrypt_symmetric(config, cleartext, passphrase):
     '''Return cleartext encrypted using passphrase.'''
+    if not isinstance(cleartext, bytes):
+        cleartext = cleartext.encode('utf-8')
     ctx = _gpg_open(config)
     return ctx.sigul_encrypt_symmetric(cleartext, passphrase)
 
 
 def gpg_decrypt_symmetric(config, ciphertext, passphrase):
     '''Return ciphertext encrypted using passphrase.'''
+    if not isinstance(ciphertext, bytes):
+        ciphertext = ciphertext.encode('utf-8')
     ctx = _gpg_open(config)
     return ctx.sigul_decrypt_symmetric(ciphertext, passphrase)
 

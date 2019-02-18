@@ -71,6 +71,7 @@ def main():
         if password != p2:
             sys.exit('Passwords don\'t match.')
 
+    name = name.encode('utf-8')
     db = server_common.db_open(config)
     user = server_common.User(name, clear_password=password, admin=True)
     db.add(user)
